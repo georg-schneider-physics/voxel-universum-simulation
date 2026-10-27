@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voxel Universum 3D - Diskretes Transformationsmodell</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.6);
+    }
+
+    /* Sci-Fi Glassmorphism */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+    }
+    
+    .glass-panel-amber {
+      background: rgba(24, 18, 12, 0.90);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    /* Range Input Customization */
+    input[type=range] {
+      accent-color: #06b6d4;
+    }
+  </style>
+</head>
+<body class="h-full w-full select-none overflow-hidden bg-slate-950">
+
+  <!-- 3D Canvas Container -->
+  <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+  <!-- UI Overlay -->
+  <div class="relative z-10 flex flex-col justify-between h-full pointer-events-none p-4 md:p-6">
+    
+    <!-- Top Bar / Header & Telemetry -->
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pointer-events-auto">
+      <!-- Title Badge & Author Meta -->
+      <div class="glass-panel rounded-xl p-4 flex items-center gap-4 border-l-4 border-l-cyan-500">
+        <div class="w-12 h-12 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-950/50">
+          <i class="fa-solid fa-cube text-2xl animate-pulse"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-wider text-slate-100 uppercase">
+              Voxel Universum
+            </h1>
+            <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono font-semibold">v3.60</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">Diskretes Transformationsmodell der Raumzeit</p>
+          <div class="flex items-center gap-3 text-[11px] text-cyan-300/90 font-mono mt-1">
+            <span class="flex items-center gap-1"><i class="fa-solid fa-user-gear text-[10px] text-amber-400"></i> Georg Schneider</span>
+            <span class="text-slate-600">•</span>
+            <a href="mailto:secret-one@web.de" class="hover:text-cyan-200 transition-colors flex items-center gap-1 underline decoration-cyan-500/40">
+              <i class="fa-envelope text-[10px] text-amber-400"></i> secret-one@web.de
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Telemetry Indicators -->
+      <div class="glass-panel rounded-xl px-4 py-3 flex items-center gap-6 text-xs font-mono">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="text-slate-400">FPS:</span>
+          <span id="telemetry-fps" class="text-emerald-400 font-bold text-sm">60</span>
+        </div>
+        <div class="hidden sm:flex flex-col border-l border-slate-700/80 pl-4">
+          <span class="text-slate-400 text-[10px] uppercase tracking-wider">Lichtgeschwindigkeit (c<sub>Modell</sub>)</span>
+          <span class="text-cyan-400 font-bold">269.813.212,2 m/s</span>
+        </div>
+        <div class="flex flex-col border-l border-slate-700/80 pl-4">
+          <span class="text-slate-400 text-[10px] uppercase tracking-wider">Aktive Voxel</span>
+          <span id="telemetry-rendered-voxels" class="text-amber-400 font-bold">0 / 0</span>
+        </div>
+        <div class="hidden md:flex flex-col border-l border-slate-700/80 pl-4">
+          <span class="text-slate-400 text-[10px] uppercase tracking-wider">Beobachter-Ersparnis</span>
+          <span id="telemetry-savings" class="text-emerald-300 font-bold">0%</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Center Toast Message -->
+    <div id="status-toast" class="self-center glass-panel-amber rounded-xl px-6 py-3 border border-amber-500/40 text-amber-200 text-sm font-mono flex items-center gap-3 transition-opacity duration-300 opacity-0 pointer-events-auto">
+      <i class="fa-solid fa-circle-info text-amber-400 text-base"></i>
+      <span id="toast-text">Modus gewechselt</span>
+    </div>
+
+    <!-- Bottom Interface: Dashboard & Controls -->
+    <footer class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end pointer-events-auto">
+      
+      <!-- Left Panel: Mode Selection & Grid Controls -->
+      <div class="lg:col-span-4 glass-panel rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 font-mono flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-cyan-400"></i> Raumzeit-Gitter Parameter
+          </h2>
+          <button id="btn-info-modal" class="text-slate-400 hover:text-cyan-300 transition-colors text-xs flex items-center gap-1 font-mono">
+            <i class="fa-solid fa-circle-question text-sm"></i> Info
+          </button>
+        </div>
+
+        <!-- Grid Resolution Slider -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs font-mono">
+            <span class="text-slate-300">Gitter-Auflösung (Grid Size):</span>
+            <span id="val-grid-size" class="text-cyan-400 font-bold">16 × 16 × 16</span>
+          </div>
+          <input type="range" id="slider-grid-size" min="8" max="24" step="2" value="16" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <!-- Space Mode Toggle -->
+        <div class="flex items-center justify-between bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+          <span class="text-xs text-slate-300">Raum-Repräsentation:</span>
+          <div class="flex bg-slate-950 p-1 rounded-md border border-slate-800 text-xs font-mono">
+            <button id="btn-mode-voxel" class="px-2.5 py-1 rounded bg-cyan-600 text-white font-semibold shadow">Diskretes Voxel-Gitter</button>
+            <button id="btn-mode-continuous" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">Kontinuierlich</button>
+          </div>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <button id="btn-pulse-light" class="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold py-2 px-3 rounded-lg shadow-lg shadow-cyan-950/40 transition border border-cyan-400/30">
+            <i class="fa-solid fa-bolt text-amber-300"></i> Licht-Puls
+          </button>
+          <button id="btn-toggle-observer" class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-lg border border-slate-600 transition">
+            <i class="fa-solid fa-eye text-emerald-400"></i> Lazy Eval: <span id="lbl-observer-status">EIN</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Center Panel: Active Simulation Experiments -->
+      <div class="lg:col-span-5 glass-panel rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 font-mono flex items-center gap-2">
+            <i class="fa-solid fa-flask-vial"></i> Transformations-Experimente
+          </h2>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <button id="btn-toggle-sphere" class="p-2.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-left transition flex flex-col gap-1">
+            <span class="text-slate-400 text-[10px] uppercase">Geometrischer Effekt</span>
+            <span class="text-amber-300 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-globe text-xs"></i> Treppen-Effekt (Kugel)
+            </span>
+          </button>
+
+          <button id="btn-toggle-zero-point" class="p-2.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-left transition flex flex-col gap-1">
+            <span class="text-slate-400 text-[10px] uppercase">Vakuum-Energie</span>
+            <span class="text-emerald-300 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-wave-square text-xs"></i> Nullpunkt-Fluktuation
+            </span>
+          </button>
+        </div>
+
+        <!-- Light Speed Control Slider -->
+        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs font-mono">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-stopwatch text-cyan-400"></i>
+            <span class="text-slate-300">Taktungs-Geschwindigkeit:</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="range" id="slider-light-speed" min="1" max="10" step="1" value="5" class="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            <span id="val-light-speed" class="text-cyan-400 w-8 text-right font-bold">5×</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Transformation Factors Dashboard -->
+      <div class="lg:col-span-3 glass-panel rounded-xl p-4 flex flex-col justify-between gap-3 font-mono">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 border-b border-slate-700/60 pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-calculator text-cyan-400"></i> Skalierungs-Faktoren
+        </h2>
+
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded border border-slate-800">
+            <span class="text-slate-400">Länge (Kante):</span>
+            <span class="text-cyan-300 font-bold">3,60</span>
+          </div>
+          <div class="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded border border-slate-800">
+            <span class="text-slate-400">Fläche (Quadrat):</span>
+            <span class="text-amber-300 font-bold">3,24</span>
+          </div>
+          <div class="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded border border-slate-800">
+            <span class="text-slate-400">Volumen (Voxel):</span>
+            <span class="text-emerald-300 font-bold">4,32</span>
+          </div>
+        </div>
+
+        <div class="text-[10px] text-slate-300 leading-tight bg-cyan-950/40 p-2 rounded border border-cyan-800/40">
+          Brechungs-Quotient: <span class="text-cyan-300 font-bold">3,24 / 3,60 = 0,90</span><br>
+          c<sub>Modell</sub> = 299.792.458 m/s × 0,90 = 269.813.212,2 m/s
+        </div>
+      </div>
+
+    </footer>
+  </div>
+
+  <!-- Theoretical Concept Modal -->
+  <div id="info-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300 p-4">
+    <div class="glass-panel rounded-2xl max-w-2xl w-full p-6 space-y-4 border-cyan-500/40 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <div>
+          <h3 class="text-lg font-bold text-cyan-400 font-mono flex items-center gap-2">
+            <i class="fa-solid fa-book-open"></i> Grundkonzepte des Voxel-Universums
+          </h3>
+          <p class="text-xs text-slate-400 font-mono mt-0.5">
+            Autor: <strong class="text-slate-200">Georg Schneider</strong> | E-Mail: <a href="mailto:secret-one@web.de" class="text-cyan-400 underline">secret-one@web.de</a>
+          </p>
+        </div>
+        <button id="btn-close-modal" class="text-slate-400 hover:text-white text-xl">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-sm text-slate-300 leading-relaxed">
+        <div class="bg-slate-900/80 p-3.5 rounded-lg border border-slate-800">
+          <h4 class="font-bold text-amber-300 font-mono text-xs uppercase mb-1">1. Quantisierung der Raumzeit &amp; Planck-Voxel</h4>
+          <p class="text-xs text-slate-300">
+            In diesem Modell ist der Raum nicht kontinuierlich unendlich teilbar, sondern auf der Planck-Skala (l<sub>P</sub> ≈ 1,616 × 10<sup>-35</sup> m) in diskrete räumliche Informationseinheiten – sogenannte <strong>Planck-Voxel</strong> (V<sub>P</sub>) – unterteilt.
+          </p>
+        </div>
+
+        <div class="bg-slate-900/80 p-3.5 rounded-lg border border-slate-800">
+          <h4 class="font-bold text-cyan-300 font-mono text-xs uppercase mb-1">2. Modell-Lichtgeschwindigkeit (c<sub>Modell</sub>)</h4>
+          <p class="text-xs text-slate-300">
+            Im diskreten Gitter breitet sich Licht nicht als stetige Welle aus, sondern sprungsweise von Voxel zu Voxel im Takt der Raumzeit. Durch den Brechungsquotienten des Gitters (3,24 / 3,60 = 0,90) ergibt sich die diskrete Ausbreitungsgeschwindigkeit von exakt 269.813.212,2 m/s.
+          </p>
+        </div>
+
+        <div class="bg-slate-900/80 p-3.5 rounded-lg border border-slate-800">
+          <h4 class="font-bold text-emerald-300 font-mono text-xs uppercase mb-1">3. Lazy Evaluation &amp; Quantenkollaps</h4>
+          <p class="text-xs text-slate-300">
+            Analog zu einer Computergrafik-Engine (Occlusion Culling) oder der Quantenmechanik existieren unbeobachtete Voxel lediglich als Superpositions-Zustand. Erst durch die Interaktion mit dem <strong>Beobachter</strong> (Kamerablick) kollabiert die Zustandswelle in einen fest berechneten Voxel.
+          </p>
+        </div>
+
+        <div class="bg-slate-900/80 p-3.5 rounded-lg border border-slate-800">
+          <h4 class="font-bold text-purple-300 font-mono text-xs uppercase mb-1">4. Vakuum-Fluktuationen &amp; Nullpunkt-Energie</h4>
+          <p class="text-xs text-slate-300">
+            Das Raumgitter steht nie vollkommen still. Die Knotenpunkte des Voxel-Rasters fluktuieren ständig mit einer stochastischen Grundenergie – den Quanten-Nullpunktfluktuationen.
+          </p>
+        </div>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button id="btn-close-modal-2" class="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition">
+          Schließen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js Application Logic -->
+  <script>
+    // --- State Management ---
+    const state = {
+      gridSize: 16,             // Dimensions: N x N x N
+      voxelSpacing: 1.2,        // Distance between voxel centers
+      isContinuous: false,      // Discrete Voxels vs Smooth Continuous
+      lazyEvaluation: true,     // Occlusion / Field of View Culling
+      sphereActive: false,      // Geometry Staircase Effect Demo
+      zeroPointActive: false,   // Vacuum Fluctuation Demo
+      lightSpeedMultiplier: 5,  // Animation Speed
+      renderedCount: 0,
+      totalCount: 0,
+      savingsPercent: 0,
+      fps: 60
+    };
+
+    // --- Three.js Setup Variables ---
+    let scene, camera, renderer, controls;
+    let continuousMesh, sphereGroup, zeroPointGroup;
+    let observerEyeMesh;
+    
+    // Light pulse animation state
+    const lightPulses = [];
+    
+    // Instanced Mesh
+    let instancedVoxelMesh;
+    const dummy = new THREE.Object3D();
+    const colorDummy = new THREE.Color();
+
+    // --- Performance Tracker ---
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    // --- Initialize Application ---
+    window.addEventListener('load', () => {
+      initThreeJS();
+      buildVoxelUniverse();
+      setupEventListeners();
+      animate();
+      showToast("Voxel-Universum v3.60 geladen.");
+    });
+
+    function initThreeJS() {
+      const container = document.getElementById('canvas-container');
+      
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x030712); // slate-950
+      scene.fog = new THREE.FogExp2(0x030712, 0.018);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(30, 25, 40);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 150;
+      controls.minDistance = 5;
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.6);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(40, 60, 20);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      scene.add(dirLight);
+
+      const pointLight = new THREE.PointLight(0xf59e0b, 1.5, 50);
+      pointLight.position.set(0, 0, 0);
+      scene.add(pointLight);
+
+      // Observer Eye Mesh (Simulated Observer Cam in Space)
+      const eyeGeo = new THREE.SphereGeometry(0.8, 16, 16);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x10b981, wireframe: true });
+      observerEyeMesh = new THREE.Mesh(eyeGeo, eyeMat);
+      scene.add(observerEyeMesh);
+
+      // Resize Handler
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    // --- Build & Rebuild Voxel Grid ---
+    function buildVoxelUniverse() {
+      if (instancedVoxelMesh) scene.remove(instancedVoxelMesh);
+      if (continuousMesh) scene.remove(continuousMesh);
+      if (sphereGroup) scene.remove(sphereGroup);
+      if (zeroPointGroup) scene.remove(zeroPointGroup);
+
+      const N = parseInt(state.gridSize);
+      const totalVoxels = N * N * N;
+      state.totalCount = totalVoxels;
+
+      // 1. Instanced Mesh for High-Performance Voxel Rendering
+      const boxGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+      const voxelMat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        roughness: 0.3,
+        metalness: 0.8,
+        transparent: true,
+        opacity: 0.85
+      });
+
+      instancedVoxelMesh = new THREE.InstancedMesh(boxGeo, voxelMat, totalVoxels);
+      instancedVoxelMesh.castShadow = true;
+      instancedVoxelMesh.receiveShadow = true;
+
+      const half = (N - 1) * state.voxelSpacing / 2;
+      let idx = 0;
+
+      for (let x = 0; x < N; x++) {
+        for (let y = 0; y < N; y++) {
+          for (let z = 0; z < N; z++) {
+            const posX = x * state.voxelSpacing - half;
+            const posY = y * state.voxelSpacing - half;
+            const posZ = z * state.voxelSpacing - half;
+
+            dummy.position.set(posX, posY, posZ);
+            dummy.scale.set(1, 1, 1);
+            dummy.updateMatrix();
+
+            instancedVoxelMesh.setMatrixAt(idx, dummy.matrix);
+            
+            // Cyan Gradient Color based on center distance
+            const distFromCenter = Math.sqrt(posX*posX + posY*posY + posZ*posZ) / (half * 1.5);
+            colorDummy.setHSL(0.55 - distFromCenter * 0.2, 0.8, 0.5);
+            instancedVoxelMesh.setColorAt(idx, colorDummy);
+
+            idx++;
+          }
+        }
+      }
+      instancedVoxelMesh.instanceMatrix.needsUpdate = true;
+      if (instancedVoxelMesh.instanceColor) instancedVoxelMesh.instanceColor.needsUpdate = true;
+
+      scene.add(instancedVoxelMesh);
+
+      // 2. Continuous Space Equivalent (Smooth Cube Container)
+      const contGeo = new THREE.BoxGeometry(N * state.voxelSpacing, N * state.voxelSpacing, N * state.voxelSpacing);
+      const contMat = new THREE.MeshPhysicalMaterial({
+        color: 0x3b82f6,
+        transmission: 0.9,
+        opacity: 1,
+        transparent: true,
+        roughness: 0.1,
+        ior: 1.2
+      });
+      continuousMesh = new THREE.Mesh(contGeo, contMat);
+      continuousMesh.visible = state.isContinuous;
+      scene.add(continuousMesh);
+
+      // 3. Staircased Voxel Sphere Overlay
+      buildSphereOverlay(N, half);
+
+      // 4. Zero Point Fluctuations Group
+      buildZeroPointGroup(N, half);
+
+      updateTelemetryUI();
+    }
+
+    // Build Staircased Voxel Sphere Demo
+    function buildSphereOverlay(N, half) {
+      sphereGroup = new THREE.Group();
+      const radius = (N * state.voxelSpacing) * 0.35;
+      
+      // Smooth Sphere Guide
+      const sphereGeo = new THREE.SphereGeometry(radius, 32, 32);
+      const sphereMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true, transparent: true, opacity: 0.3 });
+      const smoothSphere = new THREE.Mesh(sphereGeo, sphereMat);
+      sphereGroup.add(smoothSphere);
+
+      // Discrete Staircased Voxels
+      const boxGeo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+      const voxelMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.2, metalness: 0.5 });
+      
+      for (let x = 0; x < N; x++) {
+        for (let y = 0; y < N; y++) {
+          for (let z = 0; z < N; z++) {
+            const posX = x * state.voxelSpacing - half;
+            const posY = y * state.voxelSpacing - half;
+            const posZ = z * state.voxelSpacing - half;
+
+            const dist = Math.sqrt(posX*posX + posY*posY + posZ*posZ);
+            if (Math.abs(dist - radius) < state.voxelSpacing * 0.6) {
+              const vMesh = new THREE.Mesh(boxGeo, voxelMat);
+              vMesh.position.set(posX, posY, posZ);
+              sphereGroup.add(vMesh);
+            }
+          }
+        }
+      }
+      sphereGroup.visible = state.sphereActive;
+      scene.add(sphereGroup);
+    }
+
+    // Build Zero Point Fluctuations (Pulsing Node Spheres)
+    function buildZeroPointGroup(N, half) {
+      zeroPointGroup = new THREE.Group();
+      const nodeGeo = new THREE.SphereGeometry(0.15, 8, 8);
+      const nodeMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+
+      const step = state.voxelSpacing * 2;
+      for (let x = -half; x <= half; x += step) {
+        for (let y = -half; y <= half; y += step) {
+          for (let z = -half; z <= half; z += step) {
+            const node = new THREE.Mesh(nodeGeo, nodeMat);
+            node.position.set(x, y, z);
+            node.userData = { initialY: y, phase: Math.random() * Math.PI * 2 };
+            zeroPointGroup.add(node);
+          }
+        }
+      }
+      zeroPointGroup.visible = state.zeroPointActive;
+      scene.add(zeroPointGroup);
+    }
+
+    // Light Propagation Pulse
+    function triggerLightPulse() {
+      const N = parseInt(state.gridSize);
+      const half = (N - 1) * state.voxelSpacing / 2;
+
+      const pulseGeo = new THREE.SphereGeometry(0.6, 16, 16);
+      const pulseMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+      const pulse = new THREE.Mesh(pulseGeo, pulseMat);
+
+      const pLight = new THREE.PointLight(0xfde047, 3, 10);
+      pulse.add(pLight);
+
+      const startPos = new THREE.Vector3(-half, -half, -half);
+      const endPos = new THREE.Vector3(half, half, half);
+      pulse.position.copy(startPos);
+
+      scene.add(pulse);
+
+      lightPulses.push({
+        mesh: pulse,
+        currentStep: 0,
+        maxSteps: N * 3,
+        startPos: startPos,
+        endPos: endPos,
+        progress: 0
+      });
+
+      showToast("Licht-Puls gestartet (c_Modell Ausbreitung).");
+    }
+
+    // Main Render Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // FPS Counter
+      const now = performance.now();
+      frameCount++;
+      if (now - lastTime >= 1000) {
+        state.fps = Math.round((frameCount * 1000) / (now - lastTime));
+        document.getElementById('telemetry-fps').innerText = state.fps;
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      controls.update();
+
+      // Observer Eye Mesh Position
+      observerEyeMesh.position.copy(camera.position).multiplyScalar(0.2);
+
+      // 1. Lazy Evaluation Simulation
+      updateLazyEvaluation();
+
+      // 2. Light Pulses Update
+      updateLightPulses();
+
+      // 3. Zero Point Fluctuations Update
+      if (state.zeroPointActive && zeroPointGroup) {
+        const time = Date.now() * 0.003;
+        zeroPointGroup.children.forEach(node => {
+          node.position.y = node.userData.initialY + Math.sin(time + node.userData.phase) * 0.3;
+          node.scale.setScalar(0.8 + Math.cos(time * 2 + node.userData.phase) * 0.4);
+        });
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Lazy Evaluation frustum culling
+    function updateLazyEvaluation() {
+      if (!instancedVoxelMesh || state.isContinuous) return;
+
+      const N = parseInt(state.gridSize);
+      const total = state.totalCount;
+      let renderedCount = 0;
+
+      const frustum = new THREE.Frustum();
+      const cameraViewProjectionMatrix = new THREE.Matrix4();
+      cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
+
+      const half = (N - 1) * state.voxelSpacing / 2;
+      const camPos = camera.position;
+      let idx = 0;
+
+      for (let x = 0; x < N; x++) {
+        for (let y = 0; y < N; y++) {
+          for (let z = 0; z < N; z++) {
+            const posX = x * state.voxelSpacing - half;
+            const posY = y * state.voxelSpacing - half;
+            const posZ = z * state.voxelSpacing - half;
+
+            const voxelVec = new THREE.Vector3(posX, posY, posZ);
+
+            if (state.lazyEvaluation) {
+              const isVisible = frustum.containsPoint(voxelVec) && camPos.distanceTo(voxelVec) < 60;
+
+              if (isVisible) {
+                dummy.position.set(posX, posY, posZ);
+                dummy.scale.set(1, 1, 1);
+                renderedCount++;
+              } else {
+                dummy.position.set(posX, posY, posZ);
+                dummy.scale.set(0.15, 0.15, 0.15); // Uncollapsed State
+              }
+            } else {
+              dummy.position.set(posX, posY, posZ);
+              dummy.scale.set(1, 1, 1);
+              renderedCount++;
+            }
+
+            dummy.updateMatrix();
+            instancedVoxelMesh.setMatrixAt(idx, dummy.matrix);
+            idx++;
+          }
+        }
+      }
+
+      instancedVoxelMesh.instanceMatrix.needsUpdate = true;
+      state.renderedCount = renderedCount;
+      state.savingsPercent = Math.round(((total - renderedCount) / total) * 100);
+
+      updateTelemetryUI();
+    }
+
+    // Step-by-step Light Stepping
+    function updateLightPulses() {
+      for (let i = lightPulses.length - 1; i >= 0; i--) {
+        const pulse = lightPulses[i];
+        pulse.progress += 0.005 * state.lightSpeedMultiplier;
+
+        if (pulse.progress >= 1.0) {
+          scene.remove(pulse.mesh);
+          lightPulses.splice(i, 1);
+        } else {
+          const curr = new THREE.Vector3().lerpVectors(pulse.startPos, pulse.endPos, pulse.progress);
+          
+          // Snap position to discrete grid coordinates
+          const snappedX = Math.round(curr.x / state.voxelSpacing) * state.voxelSpacing;
+          const snappedY = Math.round(curr.y / state.voxelSpacing) * state.voxelSpacing;
+          const snappedZ = Math.round(curr.z / state.voxelSpacing) * state.voxelSpacing;
+
+          pulse.mesh.position.set(snappedX, snappedY, snappedZ);
+        }
+      }
+    }
+
+    // UI Event Listeners
+    function setupEventListeners() {
+      // Grid Size Slider
+      const sliderGrid = document.getElementById('slider-grid-size');
+      sliderGrid.addEventListener('input', (e) => {
+        state.gridSize = e.target.value;
+        document.getElementById('val-grid-size').innerText = `${state.gridSize} × ${state.gridSize} × ${state.gridSize}`;
+        buildVoxelUniverse();
+      });
+
+      // Mode Toggles
+      const btnVoxel = document.getElementById('btn-mode-voxel');
+      const btnContinuous = document.getElementById('btn-mode-continuous');
+
+      btnVoxel.addEventListener('click', () => {
+        state.isContinuous = false;
+        btnVoxel.className = "px-2.5 py-1 rounded bg-cyan-600 text-white font-semibold shadow";
+        btnContinuous.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white transition";
+        instancedVoxelMesh.visible = true;
+        continuousMesh.visible = false;
+        showToast("Modus: Diskretes Voxel-Gitter aktiviert.");
+      });
+
+      btnContinuous.addEventListener('click', () => {
+        state.isContinuous = true;
+        btnContinuous.className = "px-2.5 py-1 rounded bg-cyan-600 text-white font-semibold shadow";
+        btnVoxel.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white transition";
+        instancedVoxelMesh.visible = false;
+        continuousMesh.visible = true;
+        showToast("Modus: Kontinuierlicher Raum aktiviert.");
+      });
+
+      // Lazy Eval Toggle
+      const btnObserver = document.getElementById('btn-toggle-observer');
+      btnObserver.addEventListener('click', () => {
+        state.lazyEvaluation = !state.lazyEvaluation;
+        document.getElementById('lbl-observer-status').innerText = state.lazyEvaluation ? "EIN" : "AUS";
+        btnObserver.classList.toggle('bg-emerald-950', state.lazyEvaluation);
+        showToast(`Lazy Evaluation (Quantenkollaps): ${state.lazyEvaluation ? "EIN" : "AUS"}`);
+      });
+
+      // Light Pulse Button
+      document.getElementById('btn-pulse-light').addEventListener('click', triggerLightPulse);
+
+      // Light Speed Slider
+      const sliderSpeed = document.getElementById('slider-light-speed');
+      sliderSpeed.addEventListener('input', (e) => {
+        state.lightSpeedMultiplier = e.target.value;
+        document.getElementById('val-light-speed').innerText = `${state.lightSpeedMultiplier}×`;
+      });
+
+      // Sphere Treppen-Effekt Toggle
+      const btnSphere = document.getElementById('btn-toggle-sphere');
+      btnSphere.addEventListener('click', () => {
+        state.sphereActive = !state.sphereActive;
+        if (sphereGroup) sphereGroup.visible = state.sphereActive;
+        btnSphere.classList.toggle('border-amber-500', state.sphereActive);
+        showToast(`Treppen-Effekt (Kugel): ${state.sphereActive ? "Sichtbar" : "Ausgeblendet"}`);
+      });
+
+      // Zero Point Fluctuation Toggle
+      const btnZeroPoint = document.getElementById('btn-toggle-zero-point');
+      btnZeroPoint.addEventListener('click', () => {
+        state.zeroPointActive = !state.zeroPointActive;
+        if (zeroPointGroup) zeroPointGroup.visible = state.zeroPointActive;
+        btnZeroPoint.classList.toggle('border-emerald-500', state.zeroPointActive);
+        showToast(`Nullpunkt-Fluktuationen: ${state.zeroPointActive ? "Aktiv" : "Inaktiv"}`);
+      });
+
+      // Info Modal
+      const modal = document.getElementById('info-modal');
+      const openModal = () => modal.classList.remove('opacity-0', 'pointer-events-none');
+      const closeModal = () => modal.classList.add('opacity-0', 'pointer-events-none');
+
+      document.getElementById('btn-info-modal').addEventListener('click', openModal);
+      document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+      document.getElementById('btn-close-modal-2').addEventListener('click', closeModal);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function updateTelemetryUI() {
+      document.getElementById('telemetry-rendered-voxels').innerText = `${state.renderedCount} / ${state.totalCount}`;
+      document.getElementById('telemetry-savings').innerText = `${state.savingsPercent}%`;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('status-toast');
+      document.getElementById('toast-text').innerText = msg;
+      toast.classList.remove('opacity-0');
+      
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => {
+        toast.classList.add('opacity-0');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

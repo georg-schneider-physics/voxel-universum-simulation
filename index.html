@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Das Voxel-Universum: Interaktive 3D-Simulation</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        cyber: {
+                            dark: '#080d1a',
+                            panel: '#0f172a',
+                            border: '#1e293b',
+                            accent: '#38bdf8',
+                            quantum: '#a855f7',
+                            energy: '#facc15',
+                            pulse: '#34d399',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #080d1a;
+            color: #f8fafc;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #38bdf8;
+            border-radius: 3px;
+        }
+        .glow-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+        .glow-quantum {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+    </style>
+</head>
+<body class="font-sans antialiased">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div class="relative z-10 flex flex-col justify-between h-screen p-4 md:p-6 pointer-events-none">
+        
+        <!-- Header & Info -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pointer-events-auto">
+            <div class="glass-panel p-4 rounded-xl max-w-lg w-full">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-sky-500/10 rounded-lg border border-sky-500/30">
+                        <i class="fa-solid fa-cube text-sky-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-white glow-text">Das Voxel-Universum</h1>
+                        <p class="text-xs text-sky-300/80 font-mono">Diskrete Raumzeit &amp; Quanten-Engine v2.0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Author & Quick Info Badge -->
+            <div class="glass-panel px-4 py-2 rounded-xl text-xs font-mono text-slate-300 flex items-center gap-4">
+                <div><span class="text-slate-400">Autor:</span> <span class="text-sky-400 font-semibold">Georg Schneider</span></div>
+                <div class="h-3 w-px bg-slate-700"></div>
+                <div><span class="text-slate-400">Kontakt:</span> <span class="text-sky-400">secret-one@web.de</span></div>
+            </div>
+        </header>
+
+        <!-- Main Interactive Controls (Sidebar Left) -->
+        <div class="flex flex-col md:flex-row justify-between items-end gap-4 pointer-events-none my-auto">
+            <div class="glass-panel p-5 rounded-2xl w-full md:w-80 space-y-4 pointer-events-auto">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-sky-400 flex items-center gap-2 border-b border-slate-700/60 pb-2">
+                    <i class="fa-solid fa-sliders"></i> System-Steuerung
+                </h2>
+
+                <!-- Control Buttons -->
+                <div class="space-y-2.5">
+                    <button id="btn-fluktuation" class="w-full py-2.5 px-4 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-xl transition flex items-center justify-between font-mono text-xs font-semibold group">
+                        <span><i class="fa-solid fa-wave-square mr-2 text-sky-400 group-hover:animate-pulse"></i> Fluktuationen erzeugen</span>
+                        <i class="fa-solid fa-bolt text-sky-400 opacity-60"></i>
+                    </button>
+
+                    <button id="btn-pulse" class="w-full py-2.5 px-4 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl transition flex items-center justify-between font-mono text-xs font-semibold group">
+                        <span><i class="fa-solid fa-paper-plane mr-2 text-emerald-400"></i> Lichtimpuls starten</span>
+                        <i class="fa-solid fa-play text-emerald-400"></i>
+                    </button>
+
+                    <button id="btn-reset" class="w-full py-2 px-4 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-xl transition flex items-center justify-between font-mono text-xs font-semibold">
+                        <span><i class="fa-solid fa-rotate-left mr-2"></i> Gitter zurücksetzen</span>
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                    </button>
+                </div>
+
+                <!-- Sliders & Settings -->
+                <div class="space-y-3 pt-2 border-t border-slate-800">
+                    <div>
+                        <div class="flex justify-between text-xs font-mono mb-1">
+                            <span class="text-slate-400">Gittergröße (NxNxN):</span>
+                            <span id="grid-size-val" class="text-sky-400 font-bold">5x5x5</span>
+                        </div>
+                        <input id="slider-grid" type="range" min="3" max="8" value="5" class="w-full accent-sky-400 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-mono mb-1">
+                            <span class="text-slate-400">Takt-Geschwindigkeit:</span>
+                            <span id="speed-val" class="text-emerald-400 font-bold">500 ms</span>
+                        </div>
+                        <input id="slider-speed" type="range" min="100" max="1200" step="50" value="500" class="w-full accent-emerald-400 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Instruction Box -->
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-1">
+                    <p class="font-semibold text-sky-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-hand-pointer"></i> Interaktion:
+                    </p>
+                    <p>Klicke auf ein transparentes <strong>Quanten-Drahtgitter</strong>, um es zu beobachten (Lazy Evaluation Kollaps).</p>
+                </div>
+            </div>
+
+            <!-- Telemetry & Inspection Panel (Right) -->
+            <div class="glass-panel p-5 rounded-2xl w-full md:w-96 space-y-3 pointer-events-auto">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center justify-between border-b border-slate-700/60 pb-2">
+                    <span><i class="fa-solid fa-microscope mr-1.5"></i> Voxel-Telemetrie</span>
+                    <span id="target-coords" class="text-xs font-mono text-slate-400">[Keine Auswahl]</span>
+                </h2>
+
+                <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-slate-400 text-[10px]">Zustand</div>
+                        <div id="tele-state" class="text-purple-300 font-bold mt-0.5">Superposition</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-slate-400 text-[10px]">Nullpunkt-Energie</div>
+                        <div id="tele-energy" class="text-yellow-400 font-bold mt-0.5">0,000e-15 J</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-slate-400 text-[10px]">Modell-Tempo (c)</div>
+                        <div class="text-emerald-400 font-bold mt-0.5">269.813.212,2 m/s</div>
+                    </div>
+                    <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-slate-400 text-[10px]">Brechungsquotient</div>
+                        <div class="text-sky-400 font-bold mt-0.5">0,90 (3,24 / 3,60)</div>
+                    </div>
+                </div>
+
+                <!-- Real-time Console Log -->
+                <div class="mt-2">
+                    <div class="text-[10px] font-mono text-slate-400 mb-1 flex justify-between">
+                        <span>System-Protokoll</span>
+                        <span id="pulse-clock" class="text-emerald-400">Takt: 0</span>
+                    </div>
+                    <div id="console-log" class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 h-28 overflow-y-auto font-mono text-[11px] space-y-1 text-slate-300">
+                        <p class="text-sky-400">&gt; System initialisiert. Quantengitter aktiv.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Bar -->
+        <footer class="flex flex-col sm:flex-row justify-between items-center text-xs font-mono text-slate-400 glass-panel px-4 py-2 rounded-xl pointer-events-auto gap-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>Planck-Skala: <strong class="text-slate-200">l<sub>p</sub> ≈ 1,616 × 10⁻³⁵ m</strong></span>
+            </div>
+            <div>
+                <span>Status: <span id="status-text" class="text-sky-400 font-bold">Bereit</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // --- 3D Scene Variables ---
+        let scene, camera, renderer, controls;
+        let voxels = []; // Holds metadata for each voxel
+        let voxelGroup, wireframeGroup;
+        let raycaster, mouse;
+        let pulseMarker = null;
+
+        // --- Simulation Parameters ---
+        let gridSize = 5;
+        let pulseSpeedMs = 500;
+        let isPulseActive = false;
+        let pulseTimer = null;
+        let currentPulseIndex = { x: 0, y: 0, z: 0 };
+        let clockTick = 0;
+
+        const C_MODELL = 269813212.2;
+        const ETA_GITTER = 0.90;
+
+        // HTML Elements
+        const canvasContainer = document.getElementById('canvas-container');
+        const consoleLog = document.getElementById('console-log');
+        const teleCoords = document.getElementById('target-coords');
+        const teleState = document.getElementById('tele-state');
+        const teleEnergy = document.getElementById('tele-energy');
+        const pulseClock = document.getElementById('pulse-clock');
+        const statusText = document.getElementById('status-text');
+
+        // Initialize Application
+        window.addEventListener('load', () => {
+            initThreeJS();
+            buildVoxelGrid(gridSize);
+            setupEventListeners();
+            animate();
+            logMessage('Modell geladen: Planck-Voxel & Lazy Evaluation bereit.', 'sky');
+        });
+
+        // Initialize Three.js Environment
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x080d1a, 0.03);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(12, 10, 14);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            canvasContainer.appendChild(renderer.domElement);
+
+            // Orbit Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 40;
+            controls.minDistance = 5;
+
+            // Ambient & Directional Lights
+            const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight1.position.set(10, 20, 15);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xa855f7, 0.5);
+            dirLight2.position.set(-10, -10, -10);
+            scene.add(dirLight2);
+
+            // Raycasting for User Interaction
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Groups for Mesh organization
+            voxelGroup = new THREE.Group();
+            wireframeGroup = new THREE.Group();
+            scene.add(voxelGroup);
+            scene.add(wireframeGroup);
+
+            // Create Pulse Indicator Mesh
+            const pulseGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const pulseMat = new THREE.MeshBasicMaterial({ color: 0x34d399, wireframe: true });
+            pulseMarker = new THREE.Mesh(pulseGeo, pulseMat);
+            pulseMarker.visible = false;
+            scene.add(pulseMarker);
+        }
+
+        // Build 3D Voxel Grid based on Matrix dimension
+        function buildVoxelGrid(size) {
+            // Clear existing
+            while(voxelGroup.children.length > 0) voxelGroup.remove(voxelGroup.children[0]);
+            while(wireframeGroup.children.length > 0) wireframeGroup.remove(wireframeGroup.children[0]);
+            voxels = [];
+
+            const spacing = 1.6;
+            const offset = ((size - 1) * spacing) / 2;
+
+            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            const wireGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+
+            for (let x = 0; x < size; x++) {
+                for (let y = 0; y < size; y++) {
+                    for (let z = 0; z < size; z++) {
+                        const posX = x * spacing - offset;
+                        const posY = y * spacing - offset;
+                        const posZ = z * spacing - offset;
+
+                        // 1. Unobserved State: Quantum Wireframe (Superposition)
+                        const wireMat = new THREE.LineBasicMaterial({
+                            color: 0x38bdf8,
+                            transparent: true,
+                            opacity: 0.25
+                        });
+                        const wireEdges = new THREE.EdgesGeometry(wireGeo);
+                        const wireframe = new THREE.LineSegments(wireEdges, wireMat);
+                        wireframe.position.set(posX, posY, posZ);
+                        wireframeGroup.add(wireframe);
+
+                        // 2. Solid Rendered Mesh (Hidden until Lazy Evaluation Collapse)
+                        const solidMat = new THREE.MeshStandardMaterial({
+                            color: 0xa855f7,
+                            roughness: 0.2,
+                            metalness: 0.8,
+                            emissive: 0x3b0764,
+                            transparent: true,
+                            opacity: 0.95
+                        });
+                        const solidMesh = new THREE.Mesh(boxGeo, solidMat);
+                        solidMesh.position.set(posX, posY, posZ);
+                        solidMesh.visible = false; // Lazy evaluation: Not rendered yet
+                        voxelGroup.add(solidMesh);
+
+                        // Metadata Storage
+                        const voxelData = {
+                            gridPos: { x, y, z },
+                            worldPos: new THREE.Vector3(posX, posY, posZ),
+                            collapsed: false,
+                            energy: 0.0,
+                            solidMesh: solidMesh,
+                            wireframe: wireframe,
+                            baseY: posY
+                        };
+
+                        solidMesh.userData = voxelData;
+                        wireframe.userData = voxelData;
+
+                        voxels.push(voxelData);
+                    }
+                }
+            }
+
+            // Adjust Camera position relative to grid size
+            controls.target.set(0, 0, 0);
+        }
+
+        // Trigger Quantum Vacuum Fluctuations
+        function triggerFluctuations() {
+            logMessage('Vakuum-Fluktuationen erzeugt! Stochastisches Rauschen aktiv.', 'yellow');
+            statusText.textContent = 'Fluktuation...';
+            statusText.className = 'text-yellow-400 font-bold';
+
+            voxels.forEach(v => {
+                // Generate Gaussian-like stochastic zero-point energy
+                const noise = Math.abs((Math.random() + Math.random() - 1) * 1.5e-15);
+                v.energy += noise;
+
+                // Visual wobble effect
+                const offset = (Math.random() - 0.5) * 0.2;
+                v.wireframe.position.y = v.baseY + offset;
+                v.solidMesh.position.y = v.baseY + offset;
+
+                setTimeout(() => {
+                    v.wireframe.position.y = v.baseY;
+                    v.solidMesh.position.y = v.baseY;
+                }, 300);
+            });
+
+            setTimeout(() => {
+                statusText.textContent = 'Bereit';
+                statusText.className = 'text-sky-400 font-bold';
+            }, 600);
+        }
+
+        // Collapse Voxel (Lazy Evaluation) upon Observation
+        function observeVoxel(voxelData) {
+            if (!voxelData) return;
+
+            if (!voxelData.collapsed) {
+                voxelData.collapsed = true;
+                voxelData.wireframe.visible = false;
+                voxelData.solidMesh.visible = true;
+
+                // Initial random quantum energy assignment if 0
+                if (voxelData.energy === 0) {
+                    voxelData.energy = Math.random() * 2.5e-15;
+                }
+
+                // Animation glow effect
+                voxelData.solidMesh.material.emissive.setHex(0x38bdf8);
+                setTimeout(() => {
+                    voxelData.solidMesh.material.emissive.setHex(0x3b0764);
+                }, 400);
+
+                const { x, y, z } = voxelData.gridPos;
+                logMessage(`[Kollaps] Voxel (${x}, ${y}, ${z}) beobachtet & gerendert!`, 'purple');
+            }
+
+            // Update Telemetry Panel
+            updateTelemetry(voxelData);
+        }
+
+        // Telemetry UI update
+        function updateTelemetry(voxelData) {
+            const { x, y, z } = voxelData.gridPos;
+            teleCoords.textContent = `[X:${x} Y:${y} Z:${z}]`;
+            teleState.textContent = voxelData.collapsed ? 'Kollabiert (FEST)' : 'Superposition';
+            teleState.className = voxelData.collapsed ? 'text-emerald-400 font-bold mt-0.5' : 'text-purple-300 font-bold mt-0.5';
+            teleEnergy.textContent = `${voxelData.energy.toExponential(3)} J`;
+        }
+
+        // Propagate Light Pulse Step-by-Step
+        function startPulse() {
+            if (isPulseActive) return;
+
+            isPulseActive = true;
+            currentPulseIndex = { x: 0, y: Math.floor(gridSize / 2), z: Math.floor(gridSize / 2) };
+            pulseMarker.visible = true;
+            clockTick = 0;
+
+            logMessage(`[Lichtimpuls] Start bei Voxel (0, ${currentPulseIndex.y}, ${currentPulseIndex.z})`, 'emerald');
+            statusText.textContent = 'Impuls läuft...';
+            statusText.className = 'text-emerald-400 font-bold';
+
+            runPulseStep();
+
+            pulseTimer = setInterval(() => {
+                currentPulseIndex.x++;
+                if (currentPulseIndex.x >= gridSize) {
+                    // Stop Pulse
+                    clearInterval(pulseTimer);
+                    pulseMarker.visible = false;
+                    isPulseActive = false;
+                    logMessage('[Lichtimpuls] Ende der Raumzeit-Trajektorie erreicht.', 'emerald');
+                    statusText.textContent = 'Bereit';
+                    statusText.className = 'text-sky-400 font-bold';
+                    return;
+                }
+                runPulseStep();
+            }, pulseSpeedMs);
+        }
+
+        function runPulseStep() {
+            clockTick++;
+            pulseClock.textContent = `Takt: ${clockTick}`;
+
+            const { x, y, z } = currentPulseIndex;
+            const targetVoxel = voxels.find(v => v.gridPos.x === x && v.gridPos.y === y && v.gridPos.z === z);
+
+            if (targetVoxel) {
+                // Auto collapse on light interaction
+                observeVoxel(targetVoxel);
+
+                // Move visual pulse marker
+                pulseMarker.position.copy(targetVoxel.worldPos);
+
+                const effSpeed = C_MODELL * ETA_GITTER;
+                logMessage(`Takt ${clockTick}: Voxel (${x},${y},${z}) | v = ${effSpeed.toLocaleString('de-DE', {maximumFractionDigits:1})} m/s`, 'emerald');
+            }
+        }
+
+        // Reset Grid to initial wireframe superposition
+        function resetGrid() {
+            if (pulseTimer) clearInterval(pulseTimer);
+            isPulseActive = false;
+            pulseMarker.visible = false;
+            clockTick = 0;
+            pulseClock.textContent = 'Takt: 0';
+
+            voxels.forEach(v => {
+                v.collapsed = false;
+                v.energy = 0.0;
+                v.wireframe.visible = true;
+                v.solidMesh.visible = false;
+            });
+
+            teleCoords.textContent = '[Keine Auswahl]';
+            teleState.textContent = 'Superposition';
+            teleState.className = 'text-purple-300 font-bold mt-0.5';
+            teleEnergy.textContent = '0,000e-15 J';
+
+            logMessage('Gitter zurückgesetzt. Alle Voxel in Superposition.', 'sky');
+        }
+
+        // Console Log Utility
+        function logMessage(text, color = 'sky') {
+            const colors = {
+                sky: 'text-sky-400',
+                purple: 'text-purple-400',
+                emerald: 'text-emerald-400',
+                yellow: 'text-yellow-400'
+            };
+            const p = document.createElement('p');
+            p.className = colors[color] || 'text-slate-300';
+            p.textContent = `> ${text}`;
+            consoleLog.appendChild(p);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        // Event Listeners Setup
+        function setupEventListeners() {
+            // Resize Window
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Click Interaction (Raycasting)
+            window.addEventListener('pointerdown', (event) => {
+                // Ignore click if clicking on HTML UI panels
+                if (event.target.closest('.glass-panel') || event.target.tagName === 'INPUT' || event.target.tagName === 'BUTTON') {
+                    return;
+                }
+
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+
+                // Raycast against wireframes & solid meshes
+                const allObjects = [...wireframeGroup.children, ...voxelGroup.children];
+                const intersects = raycaster.intersectObjects(allObjects);
+
+                if (intersects.length > 0) {
+                    const hitObject = intersects[0].object;
+                    if (hitObject.userData && hitObject.userData.gridPos) {
+                        observeVoxel(hitObject.userData);
+                    }
+                }
+            });
+
+            // UI Button Handlers
+            document.getElementById('btn-fluktuation').addEventListener('click', triggerFluctuations);
+            document.getElementById('btn-pulse').addEventListener('click', startPulse);
+            document.getElementById('btn-reset').addEventListener('click', resetGrid);
+
+            // Grid Size Slider
+            const gridSlider = document.getElementById('slider-grid');
+            gridSlider.addEventListener('input', (e) => {
+                gridSize = parseInt(e.target.value);
+                document.getElementById('grid-size-val').textContent = `${gridSize}x${gridSize}x${gridSize}`;
+                buildVoxelGrid(gridSize);
+                logMessage(`Gittergröße angepasst: ${gridSize}x${gridSize}x${gridSize}`, 'sky');
+            });
+
+            // Speed Slider
+            const speedSlider = document.getElementById('slider-speed');
+            speedSlider.addEventListener('input', (e) => {
+                pulseSpeedMs = parseInt(e.target.value);
+                document.getElementById('speed-val').textContent = `${pulseSpeedMs} ms`;
+            });
+        }
+
+        // Animation Loop
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            controls.update();
+
+            // Subtle rotation of wireframe grid for idle dynamic feel
+            if (wireframeGroup) {
+                wireframeGroup.rotation.y = Math.sin(time * 0.0003) * 0.08;
+                voxelGroup.rotation.y = wireframeGroup.rotation.y;
+            }
+
+            // Pulse Marker glow animation
+            if (pulseMarker && pulseMarker.visible) {
+                const scale = 1 + Math.sin(time * 0.01) * 0.2;
+                pulseMarker.scale.set(scale, scale, scale);
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

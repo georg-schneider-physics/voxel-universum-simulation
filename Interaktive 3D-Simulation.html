@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JSFiddle j3pocf18</title>
+
+  <style>
+    
+  </style>
+
+  
+</head>
+<body>
+  <!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulation: Voxel-Kugel zu Würfel-Transformation</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #38bdf8; font-size: 22px; margin-bottom: 2px; text-align: center; }
+        .subtitle { color: #94a3b8; font-size: 13px; margin-bottom: 5px; text-align: center; font-style: italic; }
+        .author { color: #cbd5e1; font-size: 13px; margin-bottom: 15px; text-align: center; font-weight: bold; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1250px; width: 100%; justify-content: center; }
+        .panel { background: #1e293b; padding: 18px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); width: 380px; }
+        .viewer-container { display: flex; gap: 15px; flex: 1; flex-wrap: wrap; justify-content: center; }
+        .viewer { background: #090d16; border-radius: 12px; width: 360px; height: 450px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; border: 1px solid #334155; }
+        .viewer-title { position: absolute; top: 10px; color: #38bdf8; font-size: 13px; font-weight: bold; background: rgba(15,23,42,0.8); padding: 4px 10px; border-radius: 6px; }
+        label { display: block; margin-top: 10px; font-size: 13px; color: #cbd5e1; }
+        input[type=range] { width: 100%; margin-top: 4px; }
+        .stat { margin-top: 6px; font-size: 12px; display: flex; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 3px; }
+        .stat span { font-weight: bold; color: #38bdf8; }
+        .info-box { margin-top: 12px; background: #0f172a; padding: 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; color: #94a3b8; border-left: 4px solid #38bdf8; }
+    </style>
+</head>
+<body>
+
+<h1>Diskretes Transformationsmodell</h1>
+<div class="subtitle">Direkter visueller Vergleich: Voxel-Kugel vs. Äquivalenter Würfel (ohne π)</div>
+<div class="author">Georg Schneider | secret-one@web.de</div>
+
+<div class="container">
+    <div class="panel">
+        <label>Radius (r): <span id="rVal">5.0</span></label>
+        <input type="range" id="radiusRange" min="2" max="8" step="0.5" value="5">
+
+        <label>Transformations-Morphing (Kugel ➔ Würfel): <span id="morphVal">0%</span></label>
+        <input type="range" id="morphRange" min="0" max="1" step="0.02" value="0">
+
+        <div style="margin-top: 15px;">
+            <div class="stat">Umfang (r × 3,6): <span id="valC">18.00</span></div>
+            <div class="stat">Fläche (r² × 3,24): <span id="valA">81.00</span></div>
+            <div class="stat">Volumen (r³ × 4,32): <span id="valV">540.00</span></div>
+            <div class="stat">Voxel-Anzahl (N): <span id="voxelCount">515</span></div>
+            <div class="stat">Würfel Kantenlänge (∛N): <span id="cubeEdge">8.02</span></div>
+        </div>
+
+        <div class="info-box">
+            <strong>Modell-Kern:</strong><br>
+            Das Voxel-Kollektiv der Kugel besitzt exakt dieselbe Anzahl an Kubik-Bausteinen wie der daraus geformte, äquivalente Würfel. Durch den Morphing-Regler lässt sich die Transformation lückenlos nachvollziehen.
+        </div>
+    </div>
+
+    <div class="viewer-container">
+        <div class="viewer">
+            <div class="viewer-title">1. Voxel-Kugel (Modell-Raum)</div>
+            <canvas id="canvasSphere" width="350" height="400"></canvas>
+        </div>
+        <div class="viewer">
+            <div class="viewer-title">2. Äquivalenter Voxel-Würfel</div>
+            <canvas id="canvasCube" width="350" height="400"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvasSphere = document.getElementById('canvasSphere');
+    const ctxS = canvasSphere.getContext('2d');
+    
+    const canvasCube = document.getElementById('canvasCube');
+    const ctxC = canvasCube.getContext('2d');
+    
+    const radiusRange = document.getElementById('radiusRange');
+    const morphRange = document.getElementById('morphRange');
+    const rVal = document.getElementById('rVal');
+    const morphVal = document.getElementById('morphVal');
+    
+    const valCElem = document.getElementById('valC');
+    const valAElem = document.getElementById('valA');
+    const valVElem = document.getElementById('valV');
+    const voxelCountElem = document.getElementById('voxelCount');
+    const cubeEdgeElem = document.getElementById('cubeEdge');
+
+    let angle = 0;
+
+    function update() {
+        let r = parseFloat(radiusRange.value);
+        let morph = parseFloat(morphRange.value);
+        
+        rVal.innerText = r.toFixed(1);
+        morphVal.innerText = Math.round(morph * 100) + "%";
+
+        let c = r * 3.6;
+        let a = Math.pow(r, 2) * 3.24;
+        let v = Math.pow(r, 3) * 4.32;
+
+        valCElem.innerText = c.toFixed(2);
+        valAElem.innerText = a.toFixed(2);
+        valVElem.innerText = v.toFixed(2);
+
+        let sphereVoxels = [];
+        let limit = r;
+        for (let x = -limit; x <= limit; x += 1.0) {
+            for (let y = -limit; y <= limit; y += 1.0) {
+                for (let z = -limit; z <= limit; z += 1.0) {
+                    if (Math.sqrt(x*x + y*y + z*z) <= r) {
+                        sphereVoxels.push({x: x, y: y, z: z});
+                    }
+                }
+            }
+        }
+        let count = sphereVoxels.length;
+        voxelCountElem.innerText = count;
+
+        let cubeSide = Math.cbrt(count);
+        cubeEdgeElem.innerText = cubeSide.toFixed(2);
+
+        let cubeVoxels = [];
+        let halfC = cubeSide / 2.0;
+        for (let x = -halfC; x <= halfC; x += 1.0) {
+            for (let y = -halfC; y <= halfC; y += 1.0) {
+                for (let z = -halfC; z <= halfC; z += 1.0) {
+                    if (cubeVoxels.length < count) {
+                        cubeVoxels.push({x: x, y: y, z: z});
+                    }
+                }
+            }
+        }
+
+        drawScene(sphereVoxels, cubeVoxels, morph);
+    }
+
+    function drawScene(sphVox, cubeVox, morph) {
+        angle += 0.01;
+        let cosA = Math.cos(angle);
+        let sinA = Math.sin(angle);
+
+        // Kugel-Ansicht zeichnen
+        ctxS.clearRect(0, 0, canvasSphere.width, canvasSphere.height);
+        ctxS.save();
+        ctxS.translate(canvasSphere.width / 2, canvasSphere.height / 2 + 10);
+
+        let mappedSph = sphVox.map(v => {
+            let idx = sphVox.indexOf(v);
+            let target = cubeVox[idx] || {x: v.x * 0.8, y: v.y * 0.8, z: v.z * 0.8};
+            return {
+                x: v.x * (1 - morph) + target.x * morph,
+                y: v.y * (1 - morph) + target.y * morph,
+                z: v.z * (1 - morph) + target.z * morph
+            };
+        });
+
+        mappedSph.sort((a, b) => {
+            let zA = a.z * cosA - a.x * sinA;
+            let zB = b.z * cosA - b.x * sinA;
+            return zA - zB;
+        });
+
+        let scale = 16;
+        mappedSph.forEach(v => {
+            let xRot = v.x * cosA + v.z * sinA;
+            let zRot = v.z * cosA - v.x * sinA;
+            let yRot = v.y;
+
+            let screenX = (xRot - yRot) * scale * 0.866;
+            let screenY = (xRot + yRot) * scale * 0.5 - zRot * scale;
+            let size = scale * 0.88;
+
+            ctxS.fillStyle = '#38bdf8';
+            ctxS.strokeStyle = '#0284c7';
+            ctxS.lineWidth = 0.5;
+            ctxS.beginPath();
+            ctxS.rect(screenX - size/2, screenY - size/2, size, size);
+            ctxS.fill();
+            ctxS.stroke();
+        });
+        ctxS.restore();
+
+        // Würfel-Ansicht zeichnen
+        ctxC.clearRect(0, 0, canvasCube.width, canvasCube.height);
+        ctxC.save();
+        ctxC.translate(canvasCube.width / 2, canvasCube.height / 2 + 10);
+
+        let sortedCube = [...cubeVox];
+        sortedCube.sort((a, b) => {
+            let zA = a.z * cosA - a.x * sinA;
+            let zB = b.z * cosA - b.x * sinA;
+            return zA - zB;
+        });
+
+        sortedCube.forEach(v => {
+            let xRot = v.x * cosA + v.z * sinA;
+            let zRot = v.z * cosA - v.x * sinA;
+            let yRot = v.y;
+
+            let screenX = (xRot - yRot) * scale * 0.866;
+            let screenY = (xRot + yRot) * scale * 0.5 - zRot * scale;
+            let size = scale * 0.88;
+
+            ctxC.fillStyle = '#34d399';
+            ctxC.strokeStyle = '#059669';
+            ctxC.lineWidth = 0.5;
+            ctxC.beginPath();
+            ctxC.rect(screenX - size/2, screenY - size/2, size, size);
+            ctxC.fill();
+            ctxC.stroke();
+        });
+        ctxC.restore();
+    }
+
+    radiusRange.addEventListener('input', update);
+    morphRange.addEventListener('input', update);
+
+    update();
+</script>
+
+</body>
+</html>
+
+  <script>
+    
+  </script>
+</body>
+</html>
